@@ -28,3 +28,8 @@ export const validateUsername = (username: string) => {
 export const validateBalance = (balance: number) => {
   return balance >= 0;
 }
+
+export const validateAccountType = (acc_type: string) => {
+  const validTypes: string[] = ['current', 'saving', 'cash', 'credit_card'];
+  return validTypes.includes(acc_type);
+}

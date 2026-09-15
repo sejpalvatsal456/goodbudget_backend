@@ -1,8 +1,7 @@
 import { Request, Response } from "express";
 import pool from "../lib/pgInit.js";
 import { validate } from "uuid";
-import { validateBalance, validateName } from "../lib/validations.js";
-import { Result } from "pg";
+import { validateAccountType, validateBalance, validateName } from "../lib/validations.js";
 
 export const getAllAccountsController = async(req: Request, res: Response) => {
   try {
@@ -27,7 +26,7 @@ export const getSpecificAccountController = async(req: Request, res: Response) =
   try {
     const acc_id = req.params.id as string;
     if(!validate(acc_id)) {
-      return res.status(500).json({
+      return res.status(400).json({
         msg: "Invalid Account Id."
       });
     }
@@ -65,19 +64,25 @@ export const createAccountController = async(req: Request, res: Response) => {
     };
 
     if(!validateName(acc_name)) {
-      return res.status(500).json({
+      return res.status(400).json({
         msg: "Account name should be non empty and atmost 60 characters."
       });
     }
 
     if(!validateBalance(acc_balance)) {
-      return res.status(500).json({
+      return res.status(400).json({
         msg: "Balance should be greater than 0."
       });
     }
 
+    if(!validateAccountType(acc_type)) {
+      return res.status(400).json({
+        msg: "Account type isn't valid."
+      });
+    }
+
     if (!validate(user_id)) {
-      return res.status(500).json({
+      return res.status(400).json({
         msg: "Invalid user id."
       });
     }
@@ -85,7 +90,7 @@ export const createAccountController = async(req: Request, res: Response) => {
     const existedUserQuery = "SELECT user_id FROM users WHERE user_id = $1";
     const existedUserResult = await pool.query(existedUserQuery, [user_id]);
 
-    if(existedUserResult.rows.length == 0) {
+    if(existedUserResult.rows.length === 0) {
       return res.status(404).json({
         msg: "User with this id doesn't exist."
       });
@@ -119,20 +124,26 @@ export const updateAccountController = async(req: Request, res: Response) => {
     };
 
     if(!validate(acc_id)) {
-      return res.status(500).json({
+      return res.status(400).json({
         msg: "Invalid account id."
       });
     }
 
-    if(acc_name && !validateName(acc_name)) {
-      return res.status(500).json({
+    if(acc_name !== undefined && !validateName(acc_name)) {
+      return res.status(400).json({
         msg: "Acount name should be non empty adn atmost 60 characters."
       });
     }
 
-    if(acc_balance && validateBalance(acc_balance)) {
-      return res.status(500).json({
+    if(acc_balance !== undefined && !validateBalance(acc_balance)) {
+      return res.status(400).json({
         msg: "Balance should be greater than 0."
+      });
+    }
+
+    if(acc_type !== undefined && !validateAccountType(acc_type)) {
+      return res.status(400).json({
+        msg: "Account type isn't valid."
       });
     }
 
@@ -148,27 +159,33 @@ export const updateAccountController = async(req: Request, res: Response) => {
     let updatedFields = [];
     let updatedValues = [];
 
-    if(acc_name) {
-      updatedFields.push(`acc_name = $${updatedFields.length + 1}`);
+    if(acc_name !== undefined) {
+      updatedFields.push(`acc_name = $${updatedValues.length + 1}`);
       updatedValues.push(acc_name);
     }
 
-    if(acc_type) {
-      updatedFields.push(`acc_type = $${updatedFields.length + 1}`);
+    if(acc_type !== undefined) {
+      updatedFields.push(`acc_type = $${updatedValues.length + 1}`);
       updatedValues.push(acc_type);
     }
 
-    if(acc_balance) {
-      updatedFields.push(`acc_balance = $${updatedFields.length + 1}`);
+    if(acc_balance !== undefined) {
+      updatedFields.push(`acc_balance = $${updatedValues.length + 1}`);
       updatedValues.push(acc_balance);
     }
 
-    if(acc_is_disabled) {
-      updatedFields.push(`acc_is_disabled = $${updatedFields.length + 1}`);
+    if(acc_is_disabled !== undefined) {
+      updatedFields.push(`acc_is_disabled = $${updatedValues.length + 1}`);
       updatedValues.push(acc_is_disabled);
     }
 
     updatedValues.push(acc_id);
+
+    if (updatedFields.length === 0) {
+      return res.status(400).json({
+        msg: "No fields provided for update."
+      });
+    }
 
     const updateQuery = `UPDATE accounts SET ${updatedFields.join(", ")} WHERE acc_id = $${updatedValues.length} RETURNING *`;
     const updateResult = await pool.query(updateQuery, updatedValues);
@@ -191,7 +208,7 @@ export const deleteAccountController = async(req: Request, res: Response) => {
     const { acc_id } = req.body as { acc_id: string };
 
     if(!validate(acc_id)) {
-      return res.status(500).json({
+      return res.status(400).json({
         msg: "Invalid Account ID."
       });
     }
@@ -200,7 +217,7 @@ export const deleteAccountController = async(req: Request, res: Response) => {
     const existedAccountResult = await pool.query(existedAccountQuery, [acc_id]);
 
     if(existedAccountResult.rows.length === 0) {
-      return res.status(400).json({
+      return res.status(404).json({
         msg: "Account with this id doesn't exist."
       });
     }
