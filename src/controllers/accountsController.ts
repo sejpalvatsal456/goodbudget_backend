@@ -117,10 +117,10 @@ export const updateAccountController = async(req: Request, res: Response) => {
     
     const { acc_id, acc_name, acc_type, acc_balance, acc_is_disabled } = req.body as {
       acc_id: string,
-      acc_name: string | undefined,
-      acc_type: 'cash' | 'current' | 'saving' | 'credit_card' | undefined,
-      acc_balance: number | undefined,
-      acc_is_disabled: boolean | undefined
+      acc_name?: string,
+      acc_type?: 'cash' | 'current' | 'saving' | 'credit_card',
+      acc_balance?: number,
+      acc_is_disabled?: boolean
     };
 
     if(!validate(acc_id)) {
