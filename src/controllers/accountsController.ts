@@ -2,6 +2,7 @@ import { Request, Response } from "express";
 import pool from "../lib/pgInit.js";
 import { validate } from "uuid";
 import { validateBalance, validateName } from "../lib/validations.js";
+import { Result } from "pg";
 
 export const getAllAccountsController = async(req: Request, res: Response) => {
   try {
@@ -157,10 +158,25 @@ export const updateAccountController = async(req: Request, res: Response) => {
       updatedValues.push(acc_type);
     }
 
-    if(acc_name) {
-      updatedFields.push(`acc_name = $${updatedFields.length + 1}`);
-      updatedValues.push(acc_name);
+    if(acc_balance) {
+      updatedFields.push(`acc_balance = $${updatedFields.length + 1}`);
+      updatedValues.push(acc_balance);
     }
+
+    if(acc_is_disabled) {
+      updatedFields.push(`acc_is_disabled = $${updatedFields.length + 1}`);
+      updatedValues.push(acc_is_disabled);
+    }
+
+    updatedValues.push(acc_id);
+
+    const updateQuery = `UPDATE accounts SET ${updatedFields.join(", ")} WHERE acc_id = $${updatedValues.length} RETURNING *`;
+    const updateResult = await pool.query(updateQuery, updatedValues);
+
+    return res.json({
+      msg: "ok",
+      result: updateResult.rows[0]
+    });
 
   } catch (error) {
     console.error(error);
