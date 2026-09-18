@@ -33,3 +33,22 @@ export const validateAccountType = (acc_type: string) => {
   const validTypes: string[] = ['current', 'saving', 'cash', 'credit_card'];
   return validTypes.includes(acc_type);
 }
+
+export const validateDate = (date: string) => {
+  return !Number.isNaN(Date.parse(date))
+}
+
+export const validateTransactionType = (tran_type: string) => {
+  const validTypes: string[] = ['income', 'expense'];
+  return validTypes.includes(tran_type);
+}
+
+export const validateTransactionMode = (tran_type: string) => {
+  const validTypes: string[] = ['cash', 'online', 'credit_card'];
+  return validTypes.includes(tran_type);
+}
+
+export const validateTransactionStatus = (tran_type: string) => {
+  const validTypes: string[] = ['pending', 'completed', 'failed'];
+  return validTypes.includes(tran_type);
+}
