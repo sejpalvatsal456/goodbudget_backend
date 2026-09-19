@@ -24,7 +24,7 @@ export const getAllTransactionsController = async (
     const query = `
       SELECT *
       FROM transactions
-      ORDER BY "createdAt" DESC
+      ORDER BY "created_at" DESC
       LIMIT $1
     `;
 
@@ -122,7 +122,7 @@ export const getAllTransactionForSpecificUser = async (
       SELECT *
       FROM transactions
       WHERE user_id = $1
-      ORDER BY tran_date DESC, "createdAt" DESC
+      ORDER BY tran_date DESC, "created_at" DESC
     `;
 
     const result = await pool.query(query, [user_id]);
@@ -177,7 +177,7 @@ export const getAllTransactionForSpecificAccount = async (
       SELECT *
       FROM transactions
       WHERE account_id = $1
-      ORDER BY tran_date DESC, "createdAt" DESC
+      ORDER BY tran_date DESC, "created_at" DESC
     `;
 
     const result = await pool.query(query, [account_id]);
@@ -560,8 +560,8 @@ export const updateTransactionController = async (
       });
     }
 
-    // Always update updatedAt
-    updatedFields.push(`"updatedAt" = now()`);
+    // Always update updated_at
+    updatedFields.push(`"updated_at" = now()`);
 
     updatedValues.push(tran_id);
 
