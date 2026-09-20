@@ -3,6 +3,11 @@ export const validateName = (name: string) => {
   return !(name.trim() === "") && name.trim().length <= 60;
 };
 
+export const validateEmail = (email: string) => {
+  const regex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  return regex.test(email);
+}
+
 export const validatePassword = (password: string) => {
   // password should be non empty string and follows the following style -
   // 1. Atleast 8 character long        ==> .{8,}
