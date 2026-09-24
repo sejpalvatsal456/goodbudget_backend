@@ -56,12 +56,13 @@ export const getSpecificAccountController = async(req: Request, res: Response) =
 export const createAccountController = async(req: Request, res: Response) => {
   try {
     
-    const { acc_name, acc_type, acc_balance, user_id } = req.body as {
+    const { acc_name, acc_type, acc_balance } = req.body as {
       acc_name: string,
       acc_type: 'cash' | 'saving' | 'credit_card' | 'current',
       acc_balance: number,
-      user_id: string
     };
+
+    const user_id: string = req.auth!.id;
 
     if(!validateName(acc_name)) {
       return res.status(400).json({
@@ -115,13 +116,14 @@ export const createAccountController = async(req: Request, res: Response) => {
 export const updateAccountController = async(req: Request, res: Response) => {
   try {
     
-    const { acc_id, acc_name, acc_type, acc_balance, acc_is_disabled } = req.body as {
+    const { acc_id, acc_name, acc_type, acc_is_disabled } = req.body as {
       acc_id: string,
       acc_name?: string,
       acc_type?: 'cash' | 'current' | 'saving' | 'credit_card',
-      acc_balance?: number,
       acc_is_disabled?: boolean
     };
+
+    const user_id: string = req.auth!.id;
 
     if(!validate(acc_id)) {
       return res.status(400).json({
@@ -131,15 +133,10 @@ export const updateAccountController = async(req: Request, res: Response) => {
 
     if(acc_name !== undefined && !validateName(acc_name)) {
       return res.status(400).json({
-        msg: "Acount name should be non empty adn atmost 60 characters."
+        msg: "Account name should be non empty and at most 60 characters."
       });
     }
 
-    if(acc_balance !== undefined && !validateBalance(acc_balance)) {
-      return res.status(400).json({
-        msg: "Balance should be greater than 0."
-      });
-    }
 
     if(acc_type !== undefined && !validateAccountType(acc_type)) {
       return res.status(400).json({
@@ -147,14 +144,6 @@ export const updateAccountController = async(req: Request, res: Response) => {
       });
     }
 
-    const existedAccountQuery = "SELECT acc_id FROM accounts WHERE acc_id = $1";
-    const existedAccountResult = await pool.query(existedAccountQuery, [acc_id]);
-
-    if(existedAccountResult.rows.length === 0) {
-      return res.status(404).json({
-        msg: "Account with this id doesn't exist."
-      });
-    }
 
     let updatedFields = [];
     let updatedValues = [];
@@ -169,17 +158,13 @@ export const updateAccountController = async(req: Request, res: Response) => {
       updatedValues.push(acc_type);
     }
 
-    if(acc_balance !== undefined) {
-      updatedFields.push(`acc_balance = $${updatedValues.length + 1}`);
-      updatedValues.push(acc_balance);
-    }
-
     if(acc_is_disabled !== undefined) {
       updatedFields.push(`acc_is_disabled = $${updatedValues.length + 1}`);
       updatedValues.push(acc_is_disabled);
     }
 
     updatedValues.push(acc_id);
+    updatedValues.push(user_id);
 
     if (updatedFields.length === 0) {
       return res.status(400).json({
@@ -187,8 +172,14 @@ export const updateAccountController = async(req: Request, res: Response) => {
       });
     }
 
-    const updateQuery = `UPDATE accounts SET ${updatedFields.join(", ")} WHERE acc_id = $${updatedValues.length} RETURNING *`;
+    const updateQuery = `UPDATE accounts SET ${updatedFields.join(", ")} WHERE acc_id = $${updatedValues.length - 1} AND user_id = $${updatedValues.length} RETURNING *`;
     const updateResult = await pool.query(updateQuery, updatedValues);
+
+    if(updateResult.rows.length === 0) {
+      return res.status(404).json({
+        msg: "Account with this acc_id and user_id doesn't exist."
+      });
+    }
 
     return res.json({
       msg: "ok",
@@ -206,6 +197,8 @@ export const updateAccountController = async(req: Request, res: Response) => {
 export const deleteAccountController = async(req: Request, res: Response) => {
   try {
     const { acc_id } = req.body as { acc_id: string };
+    const user_id: string = req.auth!.id;
+
 
     if(!validate(acc_id)) {
       return res.status(400).json({
@@ -213,17 +206,14 @@ export const deleteAccountController = async(req: Request, res: Response) => {
       });
     }
 
-    const existedAccountQuery = "SELECT * FROM accounts WHERE acc_id = $1";
-    const existedAccountResult = await pool.query(existedAccountQuery, [acc_id]);
+    const deleteQuery = "DELETE FROM accounts WHERE acc_id = $1 ABD user_id = $2 RETURNING *";
+    const deleteResult = await pool.query(deleteQuery, [acc_id, user_id]);
 
-    if(existedAccountResult.rows.length === 0) {
+    if(deleteResult.rows.length === 0) {
       return res.status(404).json({
-        msg: "Account with this id doesn't exist."
+        msg: "Account with this acc_id and user_id doesn't exist."
       });
     }
-
-    const deleteQuery = "DELETE FROM accounts WHERE acc_id = $1 RETURNING *";
-    const deleteResult = await pool.query(deleteQuery, [acc_id]);
 
     return res.json({
       msg: "ok",
