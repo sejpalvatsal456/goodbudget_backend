@@ -199,19 +199,15 @@ export const getAllTransactionForSpecificAccount = async (
 // CREATE TRANSACTION
 // ---------------------------------------------------------
 
-// ---------------------------------------------------------
-// CREATE TRANSACTION
-// ---------------------------------------------------------
-
-export const createTransactionController = async (
+export const issueTransactionController = async (
   req: Request,
   res: Response,
 ) => {
+  const client = await pool.connect();
   try {
     const {
       tran_desc,
       tran_status,
-      user_id,
       account_id,
       tran_merchant,
       tran_mode,
@@ -221,14 +217,15 @@ export const createTransactionController = async (
     } = req.body as {
       tran_desc?: string;
       tran_status?: string;
-      user_id: string;
       account_id: string;
       tran_merchant: string;
       tran_mode?: string;
-      tran_type?: string;
+      tran_type: string;
       tran_date?: string;
       tran_amount: number;
     };
+
+    const user_id: string = req.auth!.id;
 
     // -------------------------
     // Validate IDs
@@ -262,6 +259,12 @@ export const createTransactionController = async (
       });
     }
 
+    if (!validateTransactionType(tran_type)) {
+      return res.status(400).json({
+        msg: "Type can only be 'income', 'expense'.",
+      });
+    }
+
     // -------------------------
     // Validate optional fields
     // (only if provided)
@@ -279,12 +282,6 @@ export const createTransactionController = async (
       });
     }
 
-    if (tran_type !== undefined && !validateTransactionType(tran_type)) {
-      return res.status(400).json({
-        msg: "Type can only be 'income', 'expense'."
-      });
-    }
-
     if (tran_date !== undefined && !validateDate(tran_date)) {
       return res.status(400).json({
         msg: "Invalid transaction date.",
@@ -292,46 +289,13 @@ export const createTransactionController = async (
     }
 
     // -------------------------
-    // Check user exists
-    // -------------------------
-
-    const existedUserQuery = "SELECT * FROM users WHERE user_id = $1";
-
-    const existedUserResult = await pool.query(existedUserQuery, [user_id]);
-
-    if (existedUserResult.rows.length === 0) {
-      return res.status(404).json({
-        msg: "User with this id doesn't exist.",
-      });
-    }
-
-    // -------------------------
-    // Check account exists AND
-    // belongs to this user
-    // -------------------------
-
-    const existedAccountQuery =
-      "SELECT acc_id FROM accounts WHERE acc_id = $1 AND user_id = $2";
-
-    const existedAccountResult = await pool.query(existedAccountQuery, [
-      account_id,
-      user_id,
-    ]);
-
-    if (existedAccountResult.rows.length === 0) {
-      return res.status(400).json({
-        msg: "Account doesn't exist or doesn't belong to this user.",
-      });
-    }
-
-    // -------------------------
     // Build dynamic INSERT
-    // (omitted fields fall back
-    // to the schema's DEFAULT)
+    // (omitted optional fields fall
+    // back to the schema's DEFAULT)
     // -------------------------
 
-    const insertedFields: string[] = ["user_id", "account_id", "tran_merchant", "tran_amount"];
-    const insertedValues: unknown[] = [user_id, account_id, tran_merchant, tran_amount];
+    const insertedFields: string[] = ["user_id", "account_id", "tran_merchant", "tran_amount", "tran_type"];
+    const insertedValues: unknown[] = [user_id, account_id, tran_merchant, tran_amount, tran_type];
 
     if (tran_desc !== undefined) {
       insertedFields.push("tran_desc");
@@ -348,31 +312,43 @@ export const createTransactionController = async (
       insertedValues.push(tran_mode);
     }
 
-    if (tran_type !== undefined) {
-      insertedFields.push("tran_type");
-      insertedValues.push(tran_type);
-    }
-
     if (tran_date !== undefined) {
       insertedFields.push("tran_date");
       insertedValues.push(tran_date);
     }
 
-    const placeholders = insertedValues.map((_, i) => `$${i + 1}`).join(", ");
+    await client.query("BEGIN");
 
+    const balanceUpdateQuery = `
+      UPDATE accounts
+      SET acc_bal = acc_bal ${tran_type === "income" ? "+" : "-"} $1
+      WHERE acc_id = $2 AND user_id = $3
+      RETURNING acc_id
+    `;
+    const balanceResult = await client.query(balanceUpdateQuery, [tran_amount, account_id, user_id]);
+
+    if (balanceResult.rows.length === 0) {
+      await client.query("ROLLBACK");
+      return res.status(404).json({ msg: "Account doesn't exist or doesn't belong to this user." });
+    }
+
+    const placeholders = insertedValues.map((_, i) => `$${i + 1}`).join(", ");
     const insertQuery = `
       INSERT INTO transactions (${insertedFields.join(", ")})
       VALUES (${placeholders})
       RETURNING *
     `;
+    const transactionResult = await client.query(insertQuery, insertedValues);
 
-    const insertResult = await pool.query(insertQuery, insertedValues);
+    await client.query("COMMIT");
 
     return res.status(201).json({
       msg: "ok",
-      result: insertResult.rows[0],
+      result: transactionResult.rows[0],
     });
+
   } catch (error: unknown) {
+    await client.query("ROLLBACK").catch(() => {}); // no-op if no txn was open
     console.error(error);
 
     if (typeof error === "object" && error !== null && "code" in error) {
@@ -405,6 +381,8 @@ export const createTransactionController = async (
     return res.status(500).json({
       msg: "Internal Server Error.",
     });
+  } finally {
+    client.release();
   }
 };
 
@@ -423,19 +401,17 @@ export const updateTransactionController = async (
       tran_status,
       tran_merchant,
       tran_mode,
-      tran_type,
       tran_date,
-      tran_amount,
     } = req.body as {
       tran_id: string;
       tran_desc?: string;
       tran_status?: string;
       tran_merchant?: string;
       tran_mode?: string;
-      tran_type?: string;
       tran_date?: string;
-      tran_amount?: number;
     };
+
+    const user_id: string = req.auth!.id;
 
     // -------------------------
     // Validate transaction ID
@@ -463,41 +439,9 @@ export const updateTransactionController = async (
       });
     }
 
-    if (tran_type !== undefined && !validateTransactionType(tran_type)) {
-      return res.status(400).json({
-        msg: "Type can only be 'income', 'expense'.",
-      });
-    }
-
-    if (tran_amount !== undefined && !validateBalance(tran_amount)) {
-      return res.status(400).json({
-        msg: "Transaction amount should be greater than 0.",
-      });
-    }
-
     if (tran_date !== undefined && !validateDate(tran_date)) {
       return res.status(400).json({
         msg: "Invalid transaction date.",
-      });
-    }
-
-    // -------------------------
-    // Check transaction exists
-    // -------------------------
-
-    const existedTransactionQuery = `
-      SELECT tran_id
-      FROM transactions
-      WHERE tran_id = $1
-    `;
-
-    const existedTransactionResult = await pool.query(existedTransactionQuery, [
-      tran_id,
-    ]);
-
-    if (existedTransactionResult.rows.length === 0) {
-      return res.status(404).json({
-        msg: "Transaction with this id doesn't exist.",
       });
     }
 
@@ -510,44 +454,27 @@ export const updateTransactionController = async (
 
     if (tran_desc !== undefined) {
       updatedFields.push(`tran_desc = $${updatedValues.length + 1}`);
-
       updatedValues.push(tran_desc);
     }
 
     if (tran_status !== undefined) {
       updatedFields.push(`tran_status = $${updatedValues.length + 1}`);
-
       updatedValues.push(tran_status);
     }
 
     if (tran_merchant !== undefined) {
       updatedFields.push(`tran_merchant = $${updatedValues.length + 1}`);
-
       updatedValues.push(tran_merchant);
     }
 
     if (tran_mode !== undefined) {
       updatedFields.push(`tran_mode = $${updatedValues.length + 1}`);
-
       updatedValues.push(tran_mode);
-    }
-
-    if (tran_type !== undefined) {
-      updatedFields.push(`tran_type = $${updatedValues.length + 1}`);
-
-      updatedValues.push(tran_type);
     }
 
     if (tran_date !== undefined) {
       updatedFields.push(`tran_date = $${updatedValues.length + 1}`);
-
       updatedValues.push(tran_date);
-    }
-
-    if (tran_amount !== undefined) {
-      updatedFields.push(`tran_amount = $${updatedValues.length + 1}`);
-
-      updatedValues.push(tran_amount);
     }
 
     // -------------------------
@@ -564,15 +491,22 @@ export const updateTransactionController = async (
     updatedFields.push(`"updated_at" = now()`);
 
     updatedValues.push(tran_id);
+    updatedValues.push(user_id);
 
     const updateQuery = `
       UPDATE transactions
       SET ${updatedFields.join(", ")}
-      WHERE tran_id = $${updatedValues.length}
+      WHERE tran_id = $${updatedValues.length - 1} AND user_id = $${updatedValues.length} AND deleted_at IS NULL
       RETURNING *
     `;
 
     const updateResult = await pool.query(updateQuery, updatedValues);
+
+    if (updateResult.rows.length === 0) {
+      return res.status(404).json({
+        msg: "Transaction with this id doesn't exist.",
+      });
+    }
 
     return res.json({
       msg: "ok",
@@ -588,7 +522,7 @@ export const updateTransactionController = async (
 
       if (pgError.code === "22P02") {
         return res.status(400).json({
-          msg: "Invalid transaction status, mode or type.",
+          msg: "Invalid transaction status or mode.",
         });
       }
     }
@@ -603,14 +537,19 @@ export const updateTransactionController = async (
 // DELETE TRANSACTION
 // ---------------------------------------------------------
 
-export const deleteTransactionController = async (
+export const softDeleteTransactionController = async (
   req: Request,
   res: Response,
 ) => {
+  const client = await pool.connect();
   try {
     const { tran_id } = req.body as {
       tran_id: string;
     };
+
+    const user_id: string = req.auth!.id;
+
+    // Validation
 
     if (!validate(tran_id)) {
       return res.status(400).json({
@@ -618,19 +557,47 @@ export const deleteTransactionController = async (
       });
     }
 
+    await client.query("BEGIN");
+
     const deleteQuery = `
-      DELETE FROM transactions
-      WHERE tran_id = $1
-      RETURNING *
+      UPDATE transactions
+      SET deleted_at = now()
+      WHERE user_id = $1 AND tran_id = $2 AND deleted_at IS NULL
+      RETURNING *;
     `;
 
-    const deleteResult = await pool.query(deleteQuery, [tran_id]);
+    const deleteResult = await client.query(deleteQuery, [user_id, tran_id]);
 
     if (deleteResult.rows.length === 0) {
+      await client.query("ROLLBACK");
       return res.status(404).json({
         msg: "Transaction with this id doesn't exist.",
       });
     }
+
+    // Update the account balance
+    const acc_id = deleteResult.rows[0].account_id;
+    const tran_type = deleteResult.rows[0].tran_type;
+    const sign = tran_type === "income" ? "-" : "+";
+    const tran_amount = deleteResult.rows[0].tran_amount;
+
+    const updateBalanceQuery = `
+      UPDATE accounts 
+      SET acc_bal ${sign}= $1
+      WHERE acc_id = $2 AND user_id = $3
+      RETURNING *;
+    `;
+
+    const updateBalanceResult = await client.query(updateBalanceQuery, [tran_amount, acc_id, user_id]);
+
+    if(updateBalanceResult.rows.length === 0) {
+      await client.query("ROLLBACK");
+      return res.status(500).json({
+        msg: "Failed to update the balance."
+      });
+    }
+
+    await client.query("COMMIT");
 
     return res.json({
       msg: "ok",
@@ -638,9 +605,12 @@ export const deleteTransactionController = async (
     });
   } catch (error) {
     console.error(error);
+    await client.query("ROLLBACK");
 
     return res.status(500).json({
       msg: "Internal Server Error.",
     });
+  } finally {
+    client.release();
   }
 };

@@ -1,6 +1,6 @@
 import { Router } from "express";
-import { createTransactionController, getAllTransactionForSpecificAccount, getAllTransactionForSpecificUser, getAllTransactionsController, getSpecificTransactionController, updateTransactionController } from "../controllers/transactionsController.js";
-import { deleteAccountController } from "../controllers/accountsController.js";
+import { getAllTransactionForSpecificAccount, getAllTransactionForSpecificUser, getAllTransactionsController, getSpecificTransactionController, issueTransactionController, updateTransactionController, softDeleteTransactionController } from "../controllers/transactionsController.js";
+import { authMiddleware } from "../middlewares/authMidddleware.js";
 
 const transactionsRouter = Router();
 
@@ -8,8 +8,8 @@ transactionsRouter.get('/', getAllTransactionsController);
 transactionsRouter.get('/:id', getSpecificTransactionController);
 transactionsRouter.get("/user/:id", getAllTransactionForSpecificUser);
 transactionsRouter.get('/account/:id', getAllTransactionForSpecificAccount);
-transactionsRouter.post('/', createTransactionController);
-transactionsRouter.patch('/', updateTransactionController);
-transactionsRouter.delete('/', deleteAccountController);
+transactionsRouter.post('/', authMiddleware, issueTransactionController);
+transactionsRouter.patch('/', authMiddleware, updateTransactionController);
+transactionsRouter.delete('/', authMiddleware, softDeleteTransactionController);
 
 export default transactionsRouter;
