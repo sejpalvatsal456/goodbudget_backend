@@ -7,7 +7,7 @@ export const summarizeAllTransaction = async(req: Request, res: Response) => {
   try {
     const start_date = req.query.start_date;
     const end_date = req.query.end_date;
-    const user_id = req.query.user_id;
+    const user_id = req.auth?.id;
 
     // Validate that start_date, end_date and user_id are all string
     if(typeof start_date !== "string") {
