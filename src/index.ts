@@ -4,6 +4,7 @@ import dotenv from 'dotenv';
 import accountsRouter from './routes/accountsRoute.js';
 import summaryRouter from './routes/summaryRoutes.js';
 import authRouter from './routes/authRoute.js';
+import transactionsRouter from './routes/transactionsRoute.js';
 
 dotenv.config();
 const app = express();
@@ -12,6 +13,7 @@ const PORT = process.env.PORT || 3000;
 app.use(express.json())
 app.use('/users/', usersRouter);
 app.use('/accounts/', accountsRouter);
+app.use('/transactions/', transactionsRouter);
 app.use('/summary', summaryRouter);
 app.use('/auth', authRouter);
 

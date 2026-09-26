@@ -321,7 +321,7 @@ export const issueTransactionController = async (
 
     const balanceUpdateQuery = `
       UPDATE accounts
-      SET acc_bal = acc_bal ${tran_type === "income" ? "+" : "-"} $1
+      SET acc_balance = acc_balance ${tran_type === "income" ? "+" : "-"} $1
       WHERE acc_id = $2 AND user_id = $3
       RETURNING acc_id
     `;
