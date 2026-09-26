@@ -130,3 +130,97 @@ export const signupController = async(req: Request, res: Response) => {
     });
   }
 }
+
+export const loginController = async (req: Request, res: Response) => {
+  try {
+    const body = req.body ?? {};
+    const raw_identifier = body.identifier;
+    const password = body.password;
+
+    if (typeof raw_identifier !== "string") {
+      return res.status(400).json({
+        msg: "Identifier can only be a string.",
+      });
+    }
+
+    if (typeof password !== "string") {
+      return res.status(400).json({
+        msg: "Password can only be a string.",
+      });
+    }
+
+    const identifier = raw_identifier.trim().toLowerCase();
+
+    if (!identifier) {
+      return res.status(400).json({
+        msg: "Email or username is required.",
+      });
+    }
+
+    // Look up by email OR username — both columns are unique, so at most
+    // one row can match.
+    const userQuery = `
+      SELECT user_id, user_name, user_email, user_username, user_password
+      FROM users
+      WHERE user_email = $1 OR user_username = $1
+    `;
+    const userResult = await pool.query(userQuery, [identifier]);
+    const user = userResult.rows[0];
+
+    if (!user) {
+      return res.status(404).json({
+        msg: "User with this email or username doesn't exist.",
+      });
+    }
+
+    const passwordMatches = await bcrypt.compare(password, user.user_password);
+
+    if (!passwordMatches) {
+      return res.status(401).json({
+        msg: "Incorrect password.",
+      });
+    }
+
+    if (!process.env.JWT_ACCESS_SECRET) {
+      throw new Error("JWT_ACCESS_SECRET is not configured");
+    }
+    if (!process.env.JWT_REFRESH_SECRET) {
+      throw new Error("JWT_REFRESH_SECRET is not configured");
+    }
+
+    const accessToken = jwt.sign(
+      { user_id: user.user_id },
+      process.env.JWT_ACCESS_SECRET,
+      { expiresIn: "15m", algorithm: "HS256" },
+    );
+    const refreshToken = jwt.sign(
+      { user_id: user.user_id },
+      process.env.JWT_REFRESH_SECRET,
+      { expiresIn: "7d", algorithm: "HS256" },
+    );
+
+    res.cookie("refreshToken", refreshToken, {
+      httpOnly: true,
+      secure: true,
+      sameSite: "strict",
+      maxAge: 7 * 24 * 60 * 60 * 1000,
+      path: "/auth",
+    });
+
+    return res.status(200).json({
+      msg: "ok",
+      user: {
+        user_id: user.user_id,
+        user_name: user.user_name,
+        user_email: user.user_email,
+        user_username: user.user_username,
+      },
+      accessToken,
+    });
+  } catch (error) {
+    console.error(error);
+    return res.status(500).json({
+      msg: "Internal Server Error",
+    });
+  }
+};
