@@ -135,7 +135,7 @@ export const loginController = async (req: Request, res: Response) => {
   try {
     const body = req.body ?? {};
     const raw_identifier = body.identifier;
-    const password = body.password;
+    const password = body.password;;
 
     if (typeof raw_identifier !== "string") {
       return res.status(400).json({
