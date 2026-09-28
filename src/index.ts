@@ -6,6 +6,7 @@ import summaryRouter from './routes/summaryRoutes.js';
 import authRouter from './routes/authRoute.js';
 import transactionsRouter from './routes/transactionsRoute.js';
 import cors from 'cors';
+import categoryRoute from './routes/categoryRoute.js';
 
 dotenv.config();
 const app = express();
@@ -26,6 +27,7 @@ app.use('/accounts/', accountsRouter);
 app.use('/transactions/', transactionsRouter);
 app.use('/summary', summaryRouter);
 app.use('/auth', authRouter);
+app.use('/categories', categoryRoute);
 
 app.listen(PORT, (err) => {
   console.log(`App is running at http://localhost:${PORT}`);
