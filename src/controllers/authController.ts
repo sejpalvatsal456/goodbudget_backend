@@ -14,7 +14,7 @@ export const signupController = async(req: Request, res: Response) => {
     if (!process.env.JWT_REFRESH_SECRET) {
       throw new Error("JWT_REFRESH_SECRET is not configured");
     }
-
+    console.log(req.body)
     const raw_name = req.body.name;
     const raw_email = req.body.email;
     const raw_username = req.body.username;
@@ -135,7 +135,7 @@ export const loginController = async (req: Request, res: Response) => {
   try {
     const body = req.body ?? {};
     const raw_identifier = body.identifier;
-    const password = body.password;;
+    const password = body.password;
 
     if (typeof raw_identifier !== "string") {
       return res.status(400).json({
