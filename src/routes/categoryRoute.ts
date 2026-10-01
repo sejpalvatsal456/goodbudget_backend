@@ -1,11 +1,12 @@
 import { Router } from "express";
-import { createCategory, getAllCategories } from "../controllers/categoryController.js";
+import { createCategoryController, getAllCategories, getSpecificCategory, updateCategoryController } from "../controllers/categoryController.js";
 import { authMiddleware } from "../middlewares/authMidddleware.js";
-import { getSpecificAccountController } from "../controllers/accountsController.js";
+
 
 const categoryRoute = Router();
 categoryRoute.get('/all/', authMiddleware, getAllCategories);
-categoryRoute.get('/:cat_id',authMiddleware, getSpecificAccountController);
-categoryRoute.post('/', authMiddleware, createCategory);
+categoryRoute.get('/:cat_id',authMiddleware, getSpecificCategory);
+categoryRoute.post('/', authMiddleware, createCategoryController);
+categoryRoute.patch('/', authMiddleware, updateCategoryController);
 
 export default categoryRoute;
