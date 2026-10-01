@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { createCategoryController, getAllCategories, getSpecificCategory, updateCategoryController } from "../controllers/categoryController.js";
+import { createCategoryController, deleteCategoryController, getAllCategories, getSpecificCategory, updateCategoryController } from "../controllers/categoryController.js";
 import { authMiddleware } from "../middlewares/authMidddleware.js";
 
 
@@ -8,5 +8,6 @@ categoryRoute.get('/all/', authMiddleware, getAllCategories);
 categoryRoute.get('/:cat_id',authMiddleware, getSpecificCategory);
 categoryRoute.post('/', authMiddleware, createCategoryController);
 categoryRoute.patch('/', authMiddleware, updateCategoryController);
+categoryRoute.delete('/', authMiddleware, deleteCategoryController);
 
 export default categoryRoute;

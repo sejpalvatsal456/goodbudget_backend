@@ -152,3 +152,29 @@ export const updateCategoryController = async(req: Request, res: Response) => {
         });
     }
 }
+
+export const deleteCategoryController = async(req: Request, res: Response) => {
+    try {
+        const user_id : string = req.auth!.id;
+        const cat_id : string = req.body.cat_id;
+
+        if (!validate(cat_id)) {
+            return res.status(400).json({
+                msg: "Invalid Category ID"
+            });
+        }
+
+        const query = "DELETE FROM categories WHERE user_id = $1 AND cat_id = $2 RETURNING *;";
+        const result = await pool.query(query, [user_id, cat_id]);
+
+        return res.json({
+            msg: "ok",
+            result: result.rows
+        });
+    } catch (error) {
+        console.error(error);
+        return res.status(500).json({
+            msg: "Internal Server Error"
+        });
+    }
+}
