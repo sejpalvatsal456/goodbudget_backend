@@ -178,3 +178,53 @@ export const deleteCategoryController = async(req: Request, res: Response) => {
         });
     }
 }
+
+const escapeLike = (str: string) => str.replace(/[\\%_]/g, "\\$&");
+
+export const searchCategoryController = async(req: Request, res: Response) => {
+    try {
+        const user_id : string = req.auth!.id;
+
+        const name = typeof req.query.name === "string" ? req.query.name.trim() : undefined;
+        const desc = typeof req.query.desc === "string" ? req.query.desc.trim() : undefined;
+
+        if (!name && !desc) {
+            return res.status(400).json({
+                msg: "Provide at least one of 'name' or 'desc' to search"
+            });
+        }
+
+        const conditions: string[] = ["user_id = $1", "deleted_at IS NULL"];
+        const values: any[] = [user_id];
+
+        if (name) {
+            values.push(`%${escapeLike(name)}%`);
+            conditions.push(`cat_name ILIKE $${values.length}`);
+        }
+
+        if (desc) {
+            values.push(`%${escapeLike(desc)}%`);
+            conditions.push(`cat_desc ILIKE $${values.length}`);
+        }
+
+        const query = `
+            SELECT cat_id, cat_name, cat_desc, created_at, updated_at
+            FROM categories
+            WHERE ${conditions.join(" AND ")}
+            ORDER BY cat_name ASC
+        `;
+
+        const result = await pool.query(query, values);
+
+        return res.json({
+            msg: "ok",
+            result: result.rows
+        });
+
+    } catch (error) {
+        console.error(error);
+        return res.status(500).json({
+            msg: "Internal Server Error"
+        });
+    }
+}
