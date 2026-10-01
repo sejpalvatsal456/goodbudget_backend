@@ -3,16 +3,40 @@ import pool from "../lib/pgInit.js";
 import { validate } from "uuid";
 
 const RATE_LIMIT = Number.parseInt(process.env.RATE_LIMIT ?? "10", 10);
+const MAX_LIMIT = 100;
 
 if (!Number.isInteger(RATE_LIMIT) || RATE_LIMIT <= 0) {
   throw new Error("Invalid RATE_LIMIT");
 }
 
+const parseNonNegativeInt = (value: unknown, fallback: number): number | null => {
+    if (typeof value === "undefined") return fallback;
+    if (typeof value !== "string" || !/^\d+$/.test(value)) return null;
+    const n = Number.parseInt(value, 10);
+    return Number.isSafeInteger(n) ? n : null;
+};
+
 export const getAllCategories = async(req: Request, res: Response) => {
     try {
         const user_id = req.auth!.id;
-        const query = "SELECT * FROM categories WHERE user_id = $1 LIMIT $2;";
-        const result = await pool.query(query, [user_id, RATE_LIMIT]);
+        const limit = parseNonNegativeInt(req.query.limit, RATE_LIMIT);
+        const offset = parseNonNegativeInt(req.query.offset, 0);
+
+        if (limit === null || offset === null || limit < 1) {
+            return res.status(400).json({
+                msg: "limit must be a positive integer and offset a non-negative integer."
+            });
+        }
+
+        const query = `
+            SELECT cat_id, cat_name, cat_desc, created_at, updated_at
+            FROM categories
+            WHERE user_id = $1 AND deleted_at IS NULL
+            ORDER BY created_at DESC, cat_id
+            LIMIT $2 OFFSET $3;
+        `;
+        const result = await pool.query(query, [user_id, Math.min(limit, MAX_LIMIT), offset]);
+
         return res.json({
             msg: "ok",
             result: result.rows
@@ -28,10 +52,23 @@ export const getAllCategories = async(req: Request, res: Response) => {
 export const getSpecificCategory = async(req: Request, res: Response) => {
     try {
         const user_id: string = req.auth!.id;
-        const cat_id = req.body.cat_id;
+        const cat_id = req.params.cat_id;
 
-        const query = "SELECT * FROM categories WHERE user_id = $1, cat_id = $2 LIMIT $3";
+        if(!validate(cat_id)) {
+            return res.status(400).json({
+                msg: "Invalid Category ID."
+            });
+        }
+
+        const query = "SELECT * FROM categories WHERE user_id = $1 AND cat_id = $2 AND deleted_at IS NULL LIMIT $3";
         const result = await pool.query(query, [user_id, cat_id, RATE_LIMIT]);
+
+        if(result.rows.length === 0) {
+            return res.status(404).json({
+                msg: "No categories found."
+            })
+        }
+
         return res.json({
             msg: "ok",
             result: result.rows 
@@ -56,7 +93,7 @@ export const createCategoryController = async(req: Request, res: Response) => {
             });
         }
 
-        if (raw_desc !== "undefined" && typeof raw_desc !== "string") {
+        if (typeof raw_desc !== "undefined" && typeof raw_desc !== "string") {
             return res.status(400).json({
                 msg: "desc should be string"
             });
@@ -99,7 +136,7 @@ export const updateCategoryController = async(req: Request, res: Response) => {
                 msg: "Invalid Category ID."
             });
         }
-        
+
         if (typeof raw_name !== "undefined" && typeof raw_name !== "string") {
             return res.status(400).json({
                 msg: "Name should be string"
@@ -134,11 +171,23 @@ export const updateCategoryController = async(req: Request, res: Response) => {
             updateValues.push(desc);
         }
 
+        if(updateQuery.length === 0) {
+            return res.status(400).json({
+                msg: "No fields provided for update."
+            });
+        }
+
         updateValues.push(user_id);
         updateValues.push(cat_id);
 
-        const query = `UPDATE categories SET ${updateQuery.join(', ')} WHERE user_id = $${updateValues.length - 1} AND cat_id = $${updateValues.length} RETURNING *`;
+        const query = `UPDATE categories SET ${updateQuery.join(', ')}, updated_at = now() WHERE user_id = $${updateValues.length - 1} AND cat_id = $${updateValues.length} AND deleted_at IS NULL RETURNING *`;
         const result = await pool.query(query, updateValues);
+
+        if(result.rows.length === 0) {
+            return res.status(404).json({
+                msg: "No categories found."
+            })
+        }
         
         return res.json({
             msg: "ok",
@@ -164,8 +213,14 @@ export const deleteCategoryController = async(req: Request, res: Response) => {
             });
         }
 
-        const query = "DELETE FROM categories WHERE user_id = $1 AND cat_id = $2 RETURNING *;";
+        const query = "UPDATE categories SET updated_at = now(), deleted_at = now() WHERE user_id = $1 AND cat_id = $2 AND deleted_at IS NULL RETURNING *;";
         const result = await pool.query(query, [user_id, cat_id]);
+
+        if(result.rows.length === 0) {
+            return res.status(404).json({
+                msg: "No categories found."
+            })
+        }
 
         return res.json({
             msg: "ok",
