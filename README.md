@@ -2,23 +2,6 @@
 
 This project exposes a set of REST endpoints for user accounts, authentication, categories, transactions, and summary reporting.
 
-Base URL:
-- Local development: http://localhost:3000
-
-Authentication:
-- Protected routes require an Authorization header in the format:
-  `Authorization: Bearer + access token string`
-- Tokens are returned from `/auth/signup` and `/auth/login`.
-
-Common response patterns:
-- `200 OK`: successful read/update/delete
-- `201 Created`: successful creation
-- `400 Bad Request`: invalid input/validation error
-- `401 Unauthorized`: missing/invalid/expired token
-- `404 Not Found`: entity does not exist
-- `409 Conflict`: duplicate email/username
-- `500 Internal Server Error`: unexpected server error
-
 ## 1) Health check
 
 ### GET /test
